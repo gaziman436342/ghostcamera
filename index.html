@@ -696,7 +696,6 @@
     <div class="result-btns">
       <button class="btn-result" onclick="saveImage()">저장</button>
       <button class="btn-result" onclick="retake()">다시 찍기</button>
-      <button class="btn-result" onclick="shareImage()">공유하기</button>
     </div>
   </div>
 
@@ -711,7 +710,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
 <script>
 
 // 카카오 인앱브라우저 감지
@@ -1388,13 +1386,13 @@ async function startCamera() {
   let stream
   try {
     const isMobile = window.innerWidth <= 720
-    const idealW = isMobile ? 640 : 1280
-    const idealH = isMobile ? 360 : 720
+    const idealW = isMobile ? 480 : 1280
+    const idealH = isMobile ? 270 : 720
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
-        width:  { ideal: idealW },
-        height: { ideal: idealH },
+        width:  { ideal: idealW, max: isMobile ? 640 : 1920 },
+        height: { ideal: idealH, max: isMobile ? 480 : 1080 },
         aspectRatio: { ideal: 16/9 }
       },
       audio: false,
@@ -1849,7 +1847,6 @@ function buildStaticCapture(camNum) {
 // ── Result ────────────────────────────────────────────────────────────────────
 function saveImage(){
   if(!state.lastDataURL) return
-  if(isKakaoInApp()) { showKakaoNotice(); return }
   try {
     const a = document.createElement('a')
     a.href = state.lastDataURL
@@ -1914,6 +1911,15 @@ let faceMeshReady = false
 
 function initFaceMesh() {
   if (faceMesh) return
+  // Face Mesh 스크립트 동적 로드
+  if (typeof FaceMesh === 'undefined') {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js'
+    s.crossOrigin = 'anonymous'
+    s.onload = () => initFaceMesh()
+    document.head.appendChild(s)
+    return
+  }
   faceMesh = new FaceMesh({
     locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`
   })
@@ -1974,13 +1980,12 @@ function getEyeCenters(landmarks, w, h) {
 }
 // ── Ghost Presence System (Soft / No Glitch) ─────────────────────────────────
 function distortFrame(ctx, w, h) {
-  const sliceH = 2, intensity = 3
+  // getImageData 대신 drawImage 자체 복사 (GPU 활용, 훨씬 빠름)
+  const sliceH = 4, intensity = 3
   for (let y = 0; y < h; y += sliceH) {
     if (Math.random() < 0.05) {
-      try {
-        const slice = ctx.getImageData(0, y, w, sliceH)
-        ctx.putImageData(slice, (Math.random()-0.5)*intensity*2, y)
-      } catch(e) {}
+      const offset = (Math.random() - 0.5) * intensity * 2
+      ctx.drawImage(ctx.canvas, 0, y, w, sliceH, offset, y, w, sliceH)
     }
   }
 }
