@@ -289,7 +289,7 @@
       position: absolute;
       bottom: 6px; right: 14px;
       font-family: monospace; font-size: 9px; letter-spacing: 0px;
-      color: rgba(126,184,255,0.22); pointer-events: none; z-index: 20;
+      color: rgba(126,184,255,0.10); pointer-events: none; z-index: 20;
       white-space: nowrap; display: none;
     }
     #save-notice.visible { display: block; }
@@ -665,7 +665,6 @@
       <button class="btn-result" onclick="retake()">다시 찍기</button>
       <button class="btn-result" onclick="shareImage()">공유하기</button>
     </div>
-    <div class="result-notice">촬영된 사진은 기기에만 저장됩니다</div>
   </div>
 
 </div><!-- /ui-wrapper -->
@@ -1577,31 +1576,31 @@ function computeGhostPlacement(pb,w,h,ghost){
 function applyCCTVFilter(ctx,w,h){
   const id=ctx.getImageData(0,0,w,h),d=id.data
   for(let i=0;i<d.length;i+=4){
-    const r=d[i], g=d[i+1], b=d[i+2]
-    d[i]  = Math.min(r*0.18 + 5,  255)
-    d[i+1]= Math.min(g*0.32 + 5,  255)
-    d[i+2]= Math.min(b*1.35 + 22, 255)
+    d[i]  = d[i]*0.15
+    d[i+1]= d[i+1]*0.28
+    d[i+2]= Math.min(d[i+2]*1.5+28, 255)
   }
   ctx.putImageData(id,0,0)
   const scale = h / 720
-
-  // 검정 스캔라인 (CAM02/03과 동일 방식)
   const lineH  = Math.max(1, Math.round(2 * scale))
   const lineGap = Math.max(2, Math.round(4 * scale))
   state.scanlineOffset=(state.scanlineOffset+0.9*scale)%h
-  ctx.fillStyle='rgba(0,0,0,0.30)'
+  // 흰색 스캔라인 — 파란 배경 위에서 더 잘 보임
+  ctx.fillStyle='rgba(255,255,255,0.12)'
   for(let y=0;y<h;y+=lineGap) ctx.fillRect(0,(y+state.scanlineOffset)%h,w,lineH)
-
-  // 흰색 노이즈 (CAM02/03과 동일)
   const nc=Math.round(2400*(w*h)/(1280*720))
   const dotS = Math.max(1, Math.round(scale))
-  ctx.fillStyle='rgba(255,255,255,0.18)'
+  // 파란 노이즈 (어제 원본)
+  ctx.fillStyle='rgba(160,200,255,0.32)'
   for(let i=0;i<nc;i++) ctx.fillRect(Math.random()*w,Math.random()*h,dotS,dotS)
-
-  // 비네팅
-  const vg=ctx.createRadialGradient(w/2,h/2,h*0.18,w/2,h/2,h*0.88)
-  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,10,0.82)')
+  // 비네팅 강하게 (어제 원본)
+  const vg=ctx.createRadialGradient(w/2,h/2,h*0.22,w/2,h/2,h*0.88)
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,18,0.85)')
   ctx.fillStyle=vg; ctx.fillRect(0,0,w,h)
+  if(Math.random()<0.004){
+    const gy2=Math.random()*h*0.8,gh2=6+Math.random()*18
+    ctx.drawImage(ctx.canvas,0,gy2,w,gh2,(Math.random()-0.5)*12,gy2,w,gh2)
+  }
 }
 
 // ── 타임스탬프 (메인뷰 전용) ─────────────────────────────────────────────────
@@ -1689,8 +1688,8 @@ function buildCaptureCanvas(results){
   if (w < 720) {
     // 모바일: 폰트 크기 0.75배 + 행간 비율 고정
     const mfs = Math.max(10, Math.round(fs * 0.75))
-    const gap = Math.round(mfs * 1.55)
-    const bot = Math.round(mfs * 1.4)
+    const gap = Math.round(mfs * 1.2)
+    const bot = Math.round(mfs * 1.0)
     ctx.font=`${mfs}px monospace`
     ctx.fillText(`${mo} ${dd} ${yr}`, padX, h - bot - gap)
     ctx.fillText(`${String(hh).padStart(2,'0')}:${mm}:${ss} ${ap}`, padX, h - bot)
@@ -1775,8 +1774,18 @@ function buildStaticCapture(camNum) {
 // ── Result ────────────────────────────────────────────────────────────────────
 function saveImage(){
   if(!state.lastDataURL) return
-  const a=document.createElement('a'); a.href=state.lastDataURL
-  a.download=`ghost_${Date.now()}.png`; a.click()
+  // 카카오 인앱브라우저 등 download 속성 미지원 환경 대응
+  try {
+    const a=document.createElement('a')
+    a.href=state.lastDataURL
+    a.download=`ghost_${Date.now()}.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } catch(e) {
+    // 폴백: 새 탭으로 열기 (사용자가 직접 길게 눌러 저장)
+    window.open(state.lastDataURL, '_blank')
+  }
 }
 function retake(){ showScreen('screen-camera'); startTooltipTimer() }
 
