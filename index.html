@@ -1431,7 +1431,15 @@ function onSegResults(results) {
     state.ready = true
     startTooltipTimer()
     const sn = document.getElementById('save-notice')
-    if (sn) sn.classList.add('visible')
+    if (sn) {
+      sn.classList.add('visible')
+      // 5초 후 사라짐
+      setTimeout(() => {
+        sn.style.transition = 'opacity 1s ease'
+        sn.style.opacity = '0'
+        setTimeout(() => sn.classList.remove('visible'), 1000)
+      }, 5000)
+    }
     initFaceMesh()
     startPresenceSystem()
   }
@@ -1576,26 +1584,25 @@ function computeGhostPlacement(pb,w,h,ghost){
 function applyCCTVFilter(ctx,w,h){
   const id=ctx.getImageData(0,0,w,h),d=id.data
   for(let i=0;i<d.length;i+=4){
-    d[i]  = d[i]*0.15
-    d[i+1]= d[i+1]*0.28
-    d[i+2]= Math.min(d[i+2]*1.5+28, 255)
+    d[i]  = d[i]*0.13
+    d[i+1]= d[i+1]*0.25
+    d[i+2]= Math.min(d[i+2]*1.55+30, 255)
   }
   ctx.putImageData(id,0,0)
   const scale = h / 720
   const lineH  = Math.max(1, Math.round(2 * scale))
   const lineGap = Math.max(2, Math.round(4 * scale))
   state.scanlineOffset=(state.scanlineOffset+0.9*scale)%h
-  // 흰색 스캔라인 — 파란 배경 위에서 더 잘 보임
-  ctx.fillStyle='rgba(255,255,255,0.12)'
+  // 스캔라인 더 선명하게
+  ctx.fillStyle='rgba(255,255,255,0.18)'
   for(let y=0;y<h;y+=lineGap) ctx.fillRect(0,(y+state.scanlineOffset)%h,w,lineH)
   const nc=Math.round(2400*(w*h)/(1280*720))
   const dotS = Math.max(1, Math.round(scale))
-  // 파란 노이즈 (어제 원본)
   ctx.fillStyle='rgba(160,200,255,0.32)'
   for(let i=0;i<nc;i++) ctx.fillRect(Math.random()*w,Math.random()*h,dotS,dotS)
-  // 비네팅 강하게 (어제 원본)
+  // 비네팅
   const vg=ctx.createRadialGradient(w/2,h/2,h*0.22,w/2,h/2,h*0.88)
-  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,18,0.85)')
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,18,0.88)')
   ctx.fillStyle=vg; ctx.fillRect(0,0,w,h)
   if(Math.random()<0.004){
     const gy2=Math.random()*h*0.8,gh2=6+Math.random()*18
@@ -1688,8 +1695,8 @@ function buildCaptureCanvas(results){
   if (w < 720) {
     // 모바일: 폰트 크기 0.75배 + 행간 비율 고정
     const mfs = Math.max(10, Math.round(fs * 0.75))
-    const gap = Math.round(mfs * 1.2)
-    const bot = Math.round(mfs * 1.0)
+    const gap = Math.round(mfs * 1.0)
+    const bot = Math.round(mfs * 1.0) + 3
     ctx.font=`${mfs}px monospace`
     ctx.fillText(`${mo} ${dd} ${yr}`, padX, h - bot - gap)
     ctx.fillText(`${String(hh).padStart(2,'0')}:${mm}:${ss} ${ap}`, padX, h - bot)
@@ -1774,16 +1781,37 @@ function buildStaticCapture(camNum) {
 // ── Result ────────────────────────────────────────────────────────────────────
 function saveImage(){
   if(!state.lastDataURL) return
-  // 카카오 인앱브라우저 등 download 속성 미지원 환경 대응
+  const filename = `ghost_${Date.now()}.png`
+
+  // iOS: Web Share API로 갤러리 저장 유도
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  if (isIOS && navigator.share) {
+    fetch(state.lastDataURL)
+      .then(r => r.blob())
+      .then(blob => {
+        const file = new File([blob], filename, { type: 'image/png' })
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: 'Ghost Camera' })
+            .catch(() => fallbackSave())
+        } else {
+          fallbackSave()
+        }
+      }).catch(() => fallbackSave())
+    return
+  }
+  fallbackSave()
+}
+
+function fallbackSave(){
+  if(!state.lastDataURL) return
   try {
-    const a=document.createElement('a')
-    a.href=state.lastDataURL
-    a.download=`ghost_${Date.now()}.png`
+    const a = document.createElement('a')
+    a.href = state.lastDataURL
+    a.download = `ghost_${Date.now()}.png`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
   } catch(e) {
-    // 폴백: 새 탭으로 열기 (사용자가 직접 길게 눌러 저장)
     window.open(state.lastDataURL, '_blank')
   }
 }
@@ -1792,17 +1820,25 @@ function retake(){ showScreen('screen-camera'); startTooltipTimer() }
 // ── 공유하기 ──────────────────────────────────────────────────────────────────
 async function shareImage(){
   if(!state.lastDataURL) return
+  const filename = `ghost_${Date.now()}.png`
   try {
     const res = await fetch(state.lastDataURL)
     const blob = await res.blob()
-    const file = new File([blob], `ghost_${Date.now()}.png`, { type: 'image/png' })
-    if(navigator.share && navigator.canShare({ files: [file] })){
+    const file = new File([blob], filename, { type: 'image/png' })
+    if(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })){
       await navigator.share({ files: [file], title: 'Ghost Camera' })
-    } else {
-      // 공유 API 미지원 시 다운로드로 폴백
-      saveImage()
+      return
     }
-  } catch(e) { console.warn('share:', e) }
+    // 파일 공유 안 되면 URL 공유 시도
+    if(navigator.share){
+      await navigator.share({ title: 'Ghost Camera', text: '수상한 형체가 포착됐어...' })
+      return
+    }
+  } catch(e) {
+    if(e.name === 'AbortError') return  // 사용자가 취소
+  }
+  // 최종 폴백: 새 탭으로 열기
+  window.open(state.lastDataURL, '_blank')
 }
 
 // ── 툴팁 타이머 ──────────────────────────────────────────────────────────────
