@@ -1536,18 +1536,25 @@ function drawFrame(results) {
   const tctx = tc1.getContext('2d')
   tctx.drawImage(canvas, 0, 0, tc1.width, tc1.height)
 
-  // CAM01 타임스탬프 — w<400 체크 없이 직접 그리기
+  // CAM01 타임스탬프 — 화면에 보이는 크기 기준
   {
     const now=new Date()
     const mo=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][now.getMonth()]
     const dd=String(now.getDate()).padStart(2,'0'),yr=now.getFullYear()
     let hh=now.getHours(); const ap=hh>=12?'PM':'AM'; hh=hh%12||12
     const mm=String(now.getMinutes()).padStart(2,'0'),ss=String(now.getSeconds()).padStart(2,'0')
-    const sc=h/720, fs=Math.round(18*sc), px=Math.round(22*sc)
-    ctx.font=`${fs}px monospace`; ctx.fillStyle='#7eb8ff'
+    // 화면 표시 크기 기준 scale (캔버스 픽셀 해상도와 무관)
+    const dispH = canvas.getBoundingClientRect().height || h
+    const ratio = h / dispH  // 캔버스 픽셀 → CSS px 변환 비율
+    const sc = dispH / 720
+    const fs = Math.round(18 * sc)
+    const px = Math.round(22 * sc)
+    const y1 = h - Math.round(39 * sc * ratio)
+    const y2 = h - Math.round(16 * sc * ratio)
+    ctx.font=`${Math.round(fs * ratio)}px monospace`; ctx.fillStyle='#7eb8ff'
     ctx.shadowColor='#7eb8ff'; ctx.shadowBlur=5
-    ctx.fillText(`${mo} ${dd} ${yr}`,px,h-Math.round(42*sc))
-    ctx.fillText(`${String(hh).padStart(2,'0')}:${mm}:${ss} ${ap}`,px,h-Math.round(16*sc))
+    ctx.fillText(`${mo} ${dd} ${yr}`, Math.round(px * ratio), y1)
+    ctx.fillText(`${String(hh).padStart(2,'0')}:${mm}:${ss} ${ap}`, Math.round(px * ratio), y2)
     ctx.shadowBlur=0
   }
 }
@@ -1661,20 +1668,24 @@ function applyCCTVFilter(ctx,w,h){
 
 // ── 타임스탬프 (메인뷰 전용) ─────────────────────────────────────────────────
 function applyCCTVTimestamp(ctx, w, h, color) {
-  // 썸네일(작은 캔버스)에서는 타임스탬프 숨김
   if (w < 400) return
   const now=new Date()
   const mo=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][now.getMonth()]
   const dd=String(now.getDate()).padStart(2,'0'),yr=now.getFullYear()
   let hh=now.getHours(); const ap=hh>=12?'PM':'AM'; hh=hh%12||12
   const mm=String(now.getMinutes()).padStart(2,'0'),ss=String(now.getSeconds()).padStart(2,'0')
-  const scale=h/720,fs=Math.round(18*scale)
+  // 화면 표시 크기 기준
+  const mainView = document.getElementById('main-view')
+  const dispH = mainView ? mainView.getBoundingClientRect().height : h
+  const ratio = h / (dispH || h)
+  const sc = (dispH || h) / 720
   const c = color || '#7eb8ff'
-  const padX = Math.round(22*scale)
-  ctx.font=`${fs}px monospace`; ctx.fillStyle=c
+  const fs = Math.round(18 * sc)
+  const padX = Math.round(22 * sc * ratio)
+  ctx.font=`${Math.round(fs * ratio)}px monospace`; ctx.fillStyle=c
   ctx.shadowColor=c; ctx.shadowBlur=5
-  ctx.fillText(`${mo} ${dd} ${yr}`, padX, h-Math.round(42*scale))
-  ctx.fillText(`${String(hh).padStart(2,'0')}:${mm}:${ss} ${ap}`, padX, h-Math.round(16*scale))
+  ctx.fillText(`${mo} ${dd} ${yr}`, padX, h-Math.round(39*sc*ratio))
+  ctx.fillText(`${String(hh).padStart(2,'0')}:${mm}:${ss} ${ap}`, padX, h-Math.round(16*sc*ratio))
   ctx.shadowBlur=0
 }
 
