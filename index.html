@@ -1453,7 +1453,7 @@ function startGlitchTimer() {
   setInterval(() => {
     if (state.noSignalActive) return
     const r = Math.random()
-    if (r < 0.04) {
+    if (r < 0.02) {
       screen.classList.add('glitch-hard')
       setTimeout(() => screen.classList.remove('glitch-hard'), 80 + Math.random() * 60)
     } else if (r < 0.18) {
@@ -1468,7 +1468,7 @@ function initSegmentation() {
   const seg = new SelfieSegmentation({
     locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/${f}`,
   })
-  seg.setOptions({ modelSelection: 1 })
+  seg.setOptions({ modelSelection: 0 })  // 0=경량(빠름), 1=정밀(느림)
   seg.onResults(onSegResults)
   state.segmentation = seg
   sendFrame()
@@ -1480,12 +1480,10 @@ const isMobileDevice = window.innerWidth <= 720
 function sendFrame() {
   if (state.video && state.video.readyState >= 2) {
     if (isMobileDevice) {
-      // 모바일: 2프레임당 1번만 세그멘테이션 (CPU 부하 반감)
       frameSkip++
-      if (frameSkip % 2 === 0) {
+      if (frameSkip % 3 === 0) {
         state.segmentation.send({ image: state.video })
       } else {
-        // 스킵 프레임: 이전 결과로 다시 그리기만
         if (state.lastSegResults) drawFrame(state.lastSegResults)
         requestAnimationFrame(sendFrame)
       }
@@ -1671,9 +1669,7 @@ function computeGhostPlacement(pb,w,h,ghost){
 // ── CCTV Filter ───────────────────────────────────────────────────────────────
 function applyCCTVFilter(ctx,w,h){
   const id=ctx.getImageData(0,0,w,h),d=id.data
-  // 모바일: 2픽셀씩 건너뛰기 (시각적 차이 거의 없음)
-  const step = (w < 720) ? 8 : 4
-  for(let i=0;i<d.length;i+=step){
+  for(let i=0;i<d.length;i+=4){
     d[i]  = d[i]*0.13
     d[i+1]= d[i+1]*0.25
     d[i+2]= Math.min(d[i+2]*1.55+30, 255)
@@ -1685,7 +1681,6 @@ function applyCCTVFilter(ctx,w,h){
   state.scanlineOffset=(state.scanlineOffset+0.9*scale)%h
   ctx.fillStyle='rgba(255,255,255,0.18)'
   for(let y=0;y<h;y+=lineGap) ctx.fillRect(0,(y+state.scanlineOffset)%h,w,lineH)
-  // 모바일: 노이즈 입자 수 줄이기
   const ncBase = (w < 720) ? 800 : 2400
   const nc=Math.round(ncBase*(w*h)/(1280*720))
   const dotS = Math.max(1, Math.round(scale))
@@ -1998,10 +1993,10 @@ function getEyeCenters(landmarks, w, h) {
 }
 // ── Ghost Presence System (Soft / No Glitch) ─────────────────────────────────
 function distortFrame(ctx, w, h) {
-  // getImageData 대신 drawImage 자체 복사 (GPU 활용, 훨씬 빠름)
-  const sliceH = 4, intensity = 3
+  // 얼굴 조각난 느낌 — 수평 슬라이스를 좌우로 밀기
+  const sliceH = 4, intensity = 8
   for (let y = 0; y < h; y += sliceH) {
-    if (Math.random() < 0.05) {
+    if (Math.random() < 0.12) {
       const offset = (Math.random() - 0.5) * intensity * 2
       ctx.drawImage(ctx.canvas, 0, y, w, sliceH, offset, y, w, sliceH)
     }
@@ -2018,10 +2013,11 @@ function runGhostEvent() {
   el.style.setProperty('--px', (40 + Math.random()*20) + '%')
   el.style.setProperty('--py', (25 + Math.random()*35) + '%')
   el.style.opacity = '0.18'
+  const c = document.getElementById('main-canvas')
+  const cCtx = c ? c.getContext('2d') : null
   presenceLoop = setInterval(() => {
-    if (state.canvas && state.ctx)
-      distortFrame(state.ctx, state.canvas.width, state.canvas.height)
-  }, 120)
+    if (c && cCtx) distortFrame(cCtx, c.width, c.height)
+  }, 80)
   const duration = 1500 + Math.random() * 1000
   setTimeout(() => {
     el.style.opacity = '0'
@@ -2031,7 +2027,7 @@ function runGhostEvent() {
 }
 
 function startPresenceSystem() {
-  setInterval(() => { if (Math.random() < 0.12) runGhostEvent() }, 4000)
+  setInterval(() => { if (Math.random() < 0.25) runGhostEvent() }, 3000)
 }
 
 const leftEyeImg  = new Image(); leftEyeImg.src  = 'lefteye.png'
