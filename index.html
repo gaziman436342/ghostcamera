@@ -235,7 +235,40 @@
       }
     }
 
-    /* 결과화면 타이틀 */
+    /* 카카오 인앱브라우저 안내 팝업 */
+    #kakao-notice {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.85);
+      align-items: center; justify-content: center;
+    }
+    #kakao-notice.visible { display: flex; }
+    #kakao-notice-box {
+      background: #0a0a14;
+      border: 1px solid #7eb8ff44;
+      padding: 28px 24px;
+      max-width: 300px;
+      text-align: center;
+      font-family: monospace;
+      color: #7eb8ff;
+    }
+    #kakao-notice-box p {
+      font-size: 13px;
+      line-height: 1.7;
+      letter-spacing: 0.5px;
+      margin: 0 0 20px;
+      color: rgba(180,220,255,0.85);
+    }
+    #kakao-notice-box button {
+      background: transparent;
+      border: 1px solid #7eb8ff66;
+      color: #7eb8ff;
+      font-family: monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 8px 20px;
+      cursor: pointer;
+    }
     #result-title {
       font-family: monospace;
       font-size: 12px;
@@ -669,9 +702,25 @@
 
 </div><!-- /ui-wrapper -->
 
+<!-- 카카오 인앱브라우저 안내 -->
+<div id="kakao-notice">
+  <div id="kakao-notice-box">
+    <p>카카오톡 브라우저에서는<br>사진 저장이 제한됩니다.<br><br>우측 하단 <strong style="color:#fff">···</strong> 메뉴에서<br><strong style="color:#fff">"외부 브라우저로 열기"</strong>를<br>선택해주세요.</p>
+    <button onclick="document.getElementById('kakao-notice').classList.remove('visible')">확인</button>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
 <script>
+
+// 카카오 인앱브라우저 감지
+function isKakaoInApp() {
+  return /KAKAOTALK|kakaotalk/i.test(navigator.userAgent)
+}
+function showKakaoNotice() {
+  document.getElementById('kakao-notice').classList.add('visible')
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 배경음악 시스템
@@ -1781,9 +1830,8 @@ function buildStaticCapture(camNum) {
 // ── Result ────────────────────────────────────────────────────────────────────
 function saveImage(){
   if(!state.lastDataURL) return
+  if(isKakaoInApp()) { showKakaoNotice(); return }
   const filename = `ghost_${Date.now()}.png`
-
-  // iOS: Web Share API로 갤러리 저장 유도
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   if (isIOS && navigator.share) {
     fetch(state.lastDataURL)
@@ -1820,6 +1868,7 @@ function retake(){ showScreen('screen-camera'); startTooltipTimer() }
 // ── 공유하기 ──────────────────────────────────────────────────────────────────
 async function shareImage(){
   if(!state.lastDataURL) return
+  if(isKakaoInApp()) { showKakaoNotice(); return }
   const filename = `ghost_${Date.now()}.png`
   try {
     const res = await fetch(state.lastDataURL)
